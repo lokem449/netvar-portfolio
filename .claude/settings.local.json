@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5678/healthz --max-time 5)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5678/ --max-time 5)",
+      "Bash(tasklist)",
+      "Bash(netstat -ano)",
+      "mcp__n8n-mcp__search_nodes",
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\\\\n\" http://localhost:5678/healthz --max-time 5)",
+      "Bash(n8n start *)",
+      "mcp__n8n-mcp__get_node",
+      "Bash(curl -s --max-time 10 http://localhost:5678/types/nodes.json)",
+      "Bash(curl -s --max-time 10 http://localhost:5678/types/nodes.json -o /tmp/nodes.json -w \"size:%{size_download} http:%{http_code}\\\\n\")",
+      "Read(//tmp/**)",
+      "mcp__desktop-commander__edit_block",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://n8n-f3xi.sliplane.app/healthz --max-time 8)",
+      "Bash(/c/Python314/Scripts/pip3.14.exe install *)",
+      "Bash(\"/c/Users/lokem/AppData/Roaming/Python/Python314/Scripts/graphify.exe\" install *)",
+      "Bash(sleep 15 && tail -10 /c/Users/lokem/AppData/Local/Temp/claude/C--Users-lokem-Claude-netvar-workflows/d9c5d8e1-18e8-427d-928b-0547f1d6285b/tasks/b048shwea.output 2>/dev/null || echo \"Ainda instalando...\")",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(pkill -f \"node\")",
+      "Bash(curl -s http://localhost:3002)"
+    ]
+  }
+}

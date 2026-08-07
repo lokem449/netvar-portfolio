@@ -1,0 +1,535 @@
+{
+  "name": "Frela - WF1 Descoberta e Qualificacao",
+  "settings": {
+    "timezone": "Europe/Berlin",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "n01",
+      "name": "Cron 10min (pico US)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -620,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/10 13-23 * * 1-5"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n02",
+      "name": "Apify - Upwork Vagas Frescas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -400,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/blackfalcondata~upwork-scraper/run-sync-get-dataset-items",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"query\": \"n8n OR zapier OR \\\"make.com\\\" OR \\\"ai agent\\\" OR \\\"workflow automation\\\" OR \\\"api integration\\\" OR \\\"web scraping\\\" OR \\\"landing page\\\" OR \\\"wordpress\\\" OR \\\"python script\\\" OR \\\"data pipeline\\\" OR chatbot\",\n  \"maxResults\": 40,\n  \"maxAgeMinutes\": 12,\n  \"verifiedPaymentOnly\": true,\n  \"descriptionFormat\": \"text\",\n  \"descriptionMaxLength\": 4000\n}",
+        "options": {
+          "timeout": 180000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "qvUTUhvDotFoJOiK",
+          "name": "Apify token"
+        }
+      }
+    },
+    {
+      "id": "n03",
+      "name": "Pre-filtro + Monta Prompt Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// Stage 1: corte gratuito em codigo. Mata a maior parte antes de gastar token de LLM.\n// Rubrica gerada de prompts/scoring.md por build_workflow.py -- NAO editar aqui.\nconst NL = String.fromCharCode(10);\nconst PISO_FIXO = 50;\nconst PISO_HORA = 20;\nconst MAX_PROPOSTAS = 25;\nconst LIMIAR = 7;\nconst BLACKLIST = ['screen share', 'screenshare', 'share your screen', 'loom', 'webcam', 'video call', 'zoom call', 'on camera', 'face to face', 'record a video', 'screen recording'];\n// Corte gratuito de PRESENCA: o que se compra e disponibilidade, nao artefato.\n// Mata isso aqui em vez de gastar $0.026 pro LLM chegar na mesma conclusao.\nconst PRESENCA = ['virtual assistant', 'customer support agent', 'support agent', 'live chat agent', 'hours per week', 'hrs per week', 'hours/week', 'full-time position', 'full time position', 'join our team', 'ongoing support', 'daily standup', 'work our hours', 'your own hours are', 'answer phones', 'cold calling', 'appointment setter', 'data entry clerk', 'moderator'];\n\nconst RUBRICA = [\n    \"Você avalia uma vaga de freelancer. Quem vai executar é um desenvolvedor que trabalha com\",\n    \"assistência de IA para código: ele produz o trabalho rápido, mas precisa entregar um\",\n    \"ARTEFATO — não pode vender presença nem disponibilidade de horário.\",\n    \"\",\n    \"## A pergunta central\",\n    \"O que o cliente recebe no final é uma COISA (site, repositório, script, sistema configurado,\",\n    \"planilha, documento, campanha montada, integração funcionando)?\",\n    \"→ elegível, qualquer área.\",\n    \"\",\n    \"Ou o que ele está comprando é ALGUÉM DISPONÍVEL (atendente, assistente virtual, plantão,\",\n    \"moderador, \\\"20h por semana\\\", presença em reuniões recorrentes, turno)?\",\n    \"→ inelegível, mesmo que pague bem.\",\n    \"\",\n    \"Atenção à pegadinha: \\\"construir um sistema de atendimento ao cliente\\\" é artefato (elegível).\",\n    \"\\\"Ser o atendente de suporte\\\" é presença (inelegível). O título engana; leia o entregável.\",\n    \"\",\n    \"## O que ele consegue entregar (amplo de propósito)\",\n    \"Sites e landing pages, front-end, HTML/CSS/JS, WordPress; scripts e ferramentas em Python ou\",\n    \"JavaScript; integração entre sistemas via API; automação de processo (n8n, Make, Zapier);\",\n    \"scraping e pipeline de dados; agentes de IA e integração de LLM; bots; limpeza e transformação\",\n    \"de dados; planilhas e dashboards; documentação técnica; configuração de campanha e de\",\n    \"ferramenta de marketing; migração de dados entre plataformas.\",\n    \"\",\n    \"Prova pública que ele pode citar: site próprio publicado com 4 projetos de exemplo, e 7\",\n    \"automações rodando em produção (prospecção B2B ponta a ponta, classificação de email por LLM,\",\n    \"webhooks de pagamento com verificação de assinatura HMAC testada, digest diário, vigia de uptime).\",\n    \"\",\n    \"## O que ele NÃO entrega\",\n    \"Design gráfico original (logo, ilustração, identidade visual), edição de vídeo, locução,\",\n    \"tradução humana certificada, app mobile nativo, e qualquer coisa que exija credencial\",\n    \"profissional (contábil, jurídica, médica).\",\n    \"\",\n    \"## Restrição rígida\",\n    \"Ele não faz webcam, screen share, gravação da própria tela, nem call com vídeo.\",\n    \"\",\n    \"## Como pontuar (score 1–10) — comece em 5\",\n    \"\",\n    \"SOMA\",\n    \"+2  o entregável é claramente um artefato definido, com critério de \\\"pronto\\\" verificável\",\n    \"+2  o escopo está descrito com precisão suficiente pra estimar o trabalho sem perguntar\",\n    \"+1  o orçamento paga bem as horas estimadas (use ~$40/h como referência de valor do tempo dele)\",\n    \"+1  está no núcleo comprovado dele (automação, integração de API, site, scraping, LLM)\",\n    \"+1  o cliente tem histórico de pagamento na plataforma (já gastou, tem review)\",\n    \"+1  poucas propostas ainda (ele ainda é lido)\",\n    \"\",\n    \"SUBTRAI\",\n    \"-4  o que se compra é presença/disponibilidade e não artefato\",\n    \"-3  exige webcam, screen share, gravação de tela, ou call com vídeo\",\n    \"-3  sugere pagamento fora da plataforma, ou pede trabalho de teste não pago\",\n    \"-3  precisa de credencial profissional, ou é design gráfico original / vídeo / app nativo\",\n    \"-2  a descrição é vaga ao ponto de não dar pra saber o que a pessoa quer\",\n    \"-2  orçamento irrealista pro escopo pedido\",\n    \"-2  muitas propostas já enviadas (chegou tarde, cliente já fez shortlist)\",\n    \"-1  exige domínio profundo de plataforma com ecossistema próprio de especialistas\",\n    \"    (Shopify/Liquid, GoHighLevel, Salesforce, HubSpot nativo) — ele entrega, mas entra\",\n    \"    como candidato mais fraco contra quem tem 20 projetos naquela plataforma\",\n    \"\",\n    \"## Regras rígidas (sobrepõem o score)\",\n    \"- Exigência de webcam/screen share/vídeo → recommendation = \\\"skip\\\".\",\n    \"- Pagamento fora da plataforma → recommendation = \\\"skip\\\" e red flag explícita.\",\n    \"- Entregável é presença e não artefato → recommendation = \\\"skip\\\".\",\n    \"- recommendation = \\\"apply\\\" exige score >= {{limiar}}.\",\n    \"  ({{limiar}} é 7 onde candidatura custa dinheiro, 5 onde a proposta é grátis.)\",\n    \"\",\n    \"## Vaga\",\n    \"{{vaga}}\",\n    \"\",\n    \"Responda SOMENTE com JSON válido, sem markdown, sem texto antes ou depois:\",\n    \"\",\n    \"{\",\n    \"  \\\"score\\\": <int 1-10>,\",\n    \"  \\\"recommendation\\\": \\\"apply\\\" | \\\"skip\\\",\",\n    \"  \\\"entregavel\\\": \\\"<o que o cliente recebe, em 6 palavras>\\\",\",\n    \"  \\\"tipo\\\": \\\"artefato\\\" | \\\"presenca\\\",\",\n    \"  \\\"area\\\": \\\"<site | automacao | integracao | dados | llm | script | marketing | outro>\\\",\",\n    \"  \\\"complexity\\\": \\\"low\\\" | \\\"medium\\\" | \\\"high\\\",\",\n    \"  \\\"estimated_hours\\\": <int>,\",\n    \"  \\\"budget_realistic\\\": <bool>,\",\n    \"  \\\"red_flags\\\": [<string>],\",\n    \"  \\\"why\\\": \\\"<uma frase, máx 20 palavras, em português>\\\",\",\n    \"  \\\"angle\\\": \\\"<se apply: a observação concreta sobre O PROBLEMA DELE que a proposta deve abrir. Se skip: string vazia>\\\"\",\n    \"}\"\n  ].join(NL);\n\nconst out = [];\nconst cortadas = [];\n\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  if (!j.jobId) { continue; }\n\n  const desc = String(j.description || '');\n  const dlow = desc.toLowerCase();\n  const appl = Number(j.totalApplicants || 0);\n  const fixo = j.budgetAmount ? Number(j.budgetAmount) : null;\n  const hmax = j.hourlyBudgetMax ? Number(j.hourlyBudgetMax) : null;\n\n  let corte = null;\n  if (!j.clientPaymentVerified) { corte = 'pagamento nao verificado'; }\n  else if (appl > MAX_PROPOSTAS) { corte = 'tarde demais: ' + appl + ' propostas'; }\n  else if (fixo !== null && fixo < PISO_FIXO) { corte = 'fixo $' + fixo + ' abaixo do piso'; }\n  else if (hmax !== null && hmax < PISO_HORA) { corte = 'hourly $' + hmax + ' abaixo do piso'; }\n  else {\n    const kw = BLACKLIST.find(function (k) { return dlow.indexOf(k) !== -1; });\n    if (kw) { corte = 'blacklist: ' + kw; }\n    else {\n      const pk = PRESENCA.find(function (k) { return dlow.indexOf(k) !== -1; });\n      if (pk) { corte = 'presenca, nao artefato: ' + pk; }\n    }\n  }\n\n  if (corte) { cortadas.push({ title: j.title, motivo: corte }); continue; }\n\n  const pub = j.publishTime ? new Date(j.publishTime) : null;\n  const idade = pub ? Math.round((Date.now() - pub.getTime()) / 60000) : -1;\n\n  let orcamento = 'nao informado';\n  if (fixo !== null) { orcamento = '$' + fixo + ' fixo'; }\n  else if (j.hourlyBudgetMin || hmax) { orcamento = '$' + (j.hourlyBudgetMin || '?') + '-$' + (hmax || '?') + '/hr'; }\n\n  const vaga = [\n    'Plataforma: Upwork (candidatura custa Connects)',\n    'Titulo: ' + String(j.title || ''),\n    'Tipo: ' + String(j.jobType || '') + ' | Orcamento: ' + orcamento,\n    'Nivel pedido: ' + String(j.experienceLevel || '') + ' | Duracao: ' + String(j.engagementDuration || ''),\n    'Skills marcadas: ' + (Array.isArray(j.skills) ? j.skills.join(', ') : ''),\n    'Publicada ha: ' + idade + ' minutos',\n    'Propostas ja enviadas: ' + appl,\n    'Cliente: ' + String(j.clientCountry || '') + ' | pagamento verificado: ' + String(j.clientPaymentVerified) + ' | ja gastou: $' + String(j.clientTotalSpent || 0) + ' | rating: ' + String(j.clientRating || 0) + ' (' + String(j.clientReviewCount || 0) + ' reviews)',\n    '',\n    'Descricao:',\n    desc.slice(0, 3500)\n  ].join(NL);\n\n  out.push({\n    json: {\n      jobId: String(j.jobId),\n      title: String(j.title || ''),\n      url: String(j.url || ''),\n      jobType: String(j.jobType || ''),\n      orcamento: orcamento,\n      valorEstimado: fixo !== null ? fixo : (hmax || null),\n      idadeMin: idade,\n      totalApplicants: appl,\n      clientCountry: String(j.clientCountry || ''),\n      clientPaymentVerified: !!j.clientPaymentVerified,\n      clientTotalSpent: Number(j.clientTotalSpent || 0),\n      clientRating: Number(j.clientRating || 0),\n      description: desc.slice(0, 3500),\n      promptScore: RUBRICA.split('{{limiar}}').join(String(LIMIAR)).split('{{vaga}}').join(vaga)\n    }\n  });\n}\n\nconsole.log('pre-filtro: ' + out.length + ' passaram, ' + cortadas.length + ' cortadas');\nfor (const c of cortadas) { console.log('  CORTA: ' + String(c.title).slice(0, 50) + ' | ' + c.motivo); }\n\nreturn out;"
+      }
+    },
+    {
+      "id": "n04",
+      "name": "Notion - Dedup por Job ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        40,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/databases/3a78b3ec-a1b8-810f-ac9f-ff3ec411949d/query",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filter: { property: 'Job ID', rich_text: { equals: $json.jobId } }, page_size: 1 }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "T2U1ZJyf8wYB0eGu",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "id": "n05",
+      "name": "Filtra Ineditas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// So segue quem ainda nao esta no Notion (evita alerta duplicado no Telegram).\nconst out = [];\nconst itens = $input.all();\nfor (let i = 0; i < itens.length; i++) {\n  const dedup = itens[i].json || {};\n  const existe = Array.isArray(dedup.results) && dedup.results.length > 0;\n  const vaga = $('Pre-filtro + Monta Prompt Score').all()[i].json;\n  if (existe) {\n    console.log('DUP ignorada: ' + String(vaga.title).slice(0, 50));\n    continue;\n  }\n  out.push({ json: vaga });\n}\nconsole.log('ineditas: ' + out.length + ' de ' + itens.length);\nreturn out;"
+      }
+    },
+    {
+      "id": "n06",
+      "name": "Claude - Score",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 2500, messages: [{ role: 'user', content: $json.promptScore }] }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "RG57ngYBuz5VpC6k",
+          "name": "Anthropic x-api-key (Frela)"
+        }
+      }
+    },
+    {
+      "id": "n07",
+      "name": "Parse Score + Monta Prompt Proposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        0
+      ],
+      "parameters": {
+        "jsCode": "// gotcha #2: modelos com thinking devolvem bloco 'thinking' antes do 'text'.\n// gotcha (novo, 24/07): max_tokens baixo truncava o JSON -> agora 2500 e checagem explicita.\nconst NL = String.fromCharCode(10);\nconst out = [];\nconst itens = $input.all();\n\nfor (let i = 0; i < itens.length; i++) {\n  const resp = itens[i].json || {};\n  const vaga = $('Filtra Ineditas').all()[i].json;\n\n  const blocos = Array.isArray(resp.content) ? resp.content : [];\n  const tb = blocos.find(function (c) { return c && c.type === 'text'; });\n  if (!tb) {\n    console.log('ERRO sem bloco text | stop=' + String(resp.stop_reason) + ' | ' + String(vaga.title).slice(0, 40));\n    continue;\n  }\n\n  let raw = String(tb.text || '').trim();\n  const ini = raw.indexOf('{');\n  const fim = raw.lastIndexOf('}');\n  if (ini === -1 || fim === -1) {\n    console.log('ERRO sem JSON no texto | ' + String(vaga.title).slice(0, 40));\n    continue;\n  }\n  raw = raw.slice(ini, fim + 1);\n\n  let s;\n  try { s = JSON.parse(raw); }\n  catch (e) {\n    console.log('ERRO JSON invalido (' + e.message + ') | stop=' + String(resp.stop_reason) + ' | ' + String(vaga.title).slice(0, 40));\n    continue;\n  }\n\n  const aplica = s.recommendation === 'apply' && Number(s.score) >= 7;\n\n  const PERFIL_PROP = [\n    'n8n self-hosted em Docker com 7 workflows em producao (nao protótipos).',\n    'Pipeline de prospeccao B2B ponta a ponta: cron -> scraping -> auditoria tecnica automatica do site -> descoberta de email -> LLM classifica o problema e escreve a abordagem -> envio transacional -> CRM, com deduplicacao e ramp de aquecimento de dominio.',\n    'Workflow de gestao de respostas: Gmail trigger -> casa remetente contra CRM -> LLM classifica a resposta -> ramifica para rascunho de proposta, atualizacao de status, ou escalonamento humano.',\n    'Webhooks de pagamento (Stripe HMAC-SHA256, PayPal verify-webhook-signature) com verificacao de assinatura real, testada contra payload forjado e genuino.',\n    'Notion API como CRM programatico, Gmail API/OAuth2, Brevo com dominio autenticado (SPF/DKIM), Apify, PageSpeed API.',\n    'Trabalha em mercado com regulacao pesada (GDPR/UWG) - sabe onde a automacao precisa parar e passar pro humano.',\n    'Entrega por repositorio GitHub ou arquivo. Comunicacao por texto.'\n  ].join(NL);\n\n  const promptProposta = [\n    'Voce e um engenheiro de automacao escrevendo uma proposta para uma vaga no Upwork.',\n    '',\n    'REGRAS:',\n    '- 150 a 220 palavras. Ingles.',\n    '- A PRIMEIRA FRASE deve ser esta observacao concreta sobre o problema do cliente, reescrita naturalmente: \"' + String(s.angle || '') + '\"',\n    '- Nunca mencione IA, Claude, ChatGPT, LLM ou qualquer ferramenta usada para escrever a proposta.',\n    '- Proponha 3 passos concretos de execucao, especificos desta vaga (nao generico).',\n    '- Cite experiencia relevante SOMENTE do que esta no perfil abaixo. Nao invente nada.',\n    '- Nao use: \"I am the perfect fit\", \"I have read your job description carefully\", \"I am excited\", \"Dear Hiring Manager\", \"utilize\", \"leverage\", \"seamless\", \"robust solution\", \"cutting-edge\".',\n    '- Nao abra com \"I\". Nao use bullet com emoji.',\n    '- Frases curtas. Tom de par tecnico conversando com par, nao vendedor.',\n    '- Termine com UMA pergunta especifica sobre uma decisao tecnica da vaga.',\n    '- Sem assinatura, sem \"Best regards\".',\n    '',\n    'Escopo estimado internamente: ' + String(s.complexity) + ', ~' + String(s.estimated_hours) + 'h. Use isso para dar prazo realista, mas nao mencione horas.',\n    '',\n    '## Perfil (fatos verificaveis - nao extrapole)',\n    PERFIL_PROP,\n    '',\n    '## Vaga',\n    'Titulo: ' + vaga.title,\n    'Orcamento: ' + vaga.orcamento,\n    'Descricao:',\n    String(vaga.description).slice(0, 3000),\n    '',\n    'Responda somente com o texto da proposta.'\n  ].join(NL);\n\n  out.push({\n    json: Object.assign({}, vaga, {\n      score: Number(s.score),\n      recommendation: s.recommendation,\n      complexity: s.complexity,\n      estimated_hours: Number(s.estimated_hours || 0),\n      budget_realistic: !!s.budget_realistic,\n      red_flags: Array.isArray(s.red_flags) ? s.red_flags : [],\n      why: String(s.why || ''),\n      angle: String(s.angle || ''),\n      aplica: aplica,\n      promptProposta: promptProposta\n    })\n  });\n}\n\nreturn out;"
+      }
+    },
+    {
+      "id": "n08",
+      "name": "IF score >= 7",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        920,
+        0
+      ],
+      "parameters": {
+        "options": {
+          "ignoreCase": true,
+          "looseTypeValidation": false
+        },
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.aplica }}",
+              "rightValue": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n09",
+      "name": "Claude - Escreve Proposta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        -120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 2000, messages: [{ role: 'user', content: $json.promptProposta }] }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "RG57ngYBuz5VpC6k",
+          "name": "Anthropic x-api-key (Frela)"
+        }
+      }
+    },
+    {
+      "id": "n10",
+      "name": "Monta Registro e Alerta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        -120
+      ],
+      "parameters": {
+        "jsCode": "const NL = String.fromCharCode(10);\nconst out = [];\nconst itens = $input.all();\n\nfor (let i = 0; i < itens.length; i++) {\n  const resp = itens[i].json || {};\n  const v = $('IF score >= 7').all()[i].json;\n\n  const blocos = Array.isArray(resp.content) ? resp.content : [];\n  const tb = blocos.find(function (c) { return c && c.type === 'text'; });\n  const proposta = tb ? String(tb.text || '').trim() : '(FALHA ao gerar proposta - escreva manualmente)';\n\n  const notionBody = {\n    parent: { database_id: '3a78b3ec-a1b8-810f-ac9f-ff3ec411949d' },\n    properties: {\n      'Nome da vaga': { title: [{ text: { content: v.title.slice(0, 1900) } }] },\n      'Job ID': { rich_text: [{ text: { content: v.jobId } }] },\n      'Plataforma': { select: { name: 'Upwork' } },\n      'Data de captura': { date: { start: new Date().toISOString() } },\n      'Score': { number: v.score },\n      'Status': { select: { name: 'Qualificada' } },\n      'Orcamento': { rich_text: [{ text: { content: v.orcamento } }] },\n      'Link da vaga': { url: v.url },\n      'Proposta enviada': { rich_text: [{ text: { content: proposta.slice(0, 1900) } }] },\n      'Pagamento verificado': { checkbox: v.clientPaymentVerified },\n      'Pais do cliente': { rich_text: [{ text: { content: v.clientCountry } }] },\n      'Cliente gastou USD': { number: v.clientTotalSpent },\n      'Propostas': { number: v.totalApplicants },\n      'Complexidade': { select: { name: v.complexity } },\n      'Horas estimadas': { number: v.estimated_hours },\n      'Red flags': { rich_text: [{ text: { content: (v.red_flags.join('; ') || 'nenhuma').slice(0, 1900) } }] },\n      'Recomendacao': { select: { name: 'apply' } }\n    }\n  };\n  if (v.valorEstimado) { notionBody.properties['Valor estimado USD'] = { number: v.valorEstimado }; }\n\n  const alerta = [\n    'VAGA ' + v.score + '/10 - ' + v.idadeMin + 'min - ' + v.totalApplicants + ' propostas',\n    '',\n    v.title,\n    v.orcamento + ' | ' + v.complexity + ' | ~' + v.estimated_hours + 'h',\n    'Cliente: ' + v.clientCountry + ' | gastou $' + v.clientTotalSpent + ' | rating ' + v.clientRating,\n    (v.red_flags.length ? 'FLAGS: ' + v.red_flags.join('; ') : 'sem red flags'),\n    '',\n    v.url,\n    '',\n    '--- PROPOSTA (copiar) ---',\n    proposta\n  ].join(NL);\n\n  out.push({ json: { notionBody: notionBody, alerta: alerta.slice(0, 4000), title: v.title, url: v.url } });\n}\n\nreturn out;"
+      }
+    },
+    {
+      "id": "n11",
+      "name": "Notion - Cria Vaga Qualificada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1600,
+        -120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.notionBody) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "T2U1ZJyf8wYB0eGu",
+          "name": "Notion API"
+        }
+      }
+    },
+    {
+      "id": "n12",
+      "name": "Telegram - Alerta",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1820,
+        -120
+      ],
+      "parameters": {
+        "chatId": "={{ $env.FRELA_TELEGRAM_CHAT_ID || 'TROCAR_CHAT_ID' }}",
+        "text": "={{ $('Monta Registro e Alerta').item.json.alerta }}",
+        "additionalFields": {
+          "disable_web_page_preview": true
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "Ea5Xm0VGbDQ5u2nh",
+          "name": "Telegram Bot Frela"
+        }
+      }
+    },
+    {
+      "id": "n13",
+      "name": "Monta Arquivo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        140
+      ],
+      "parameters": {
+        "jsCode": "// Vagas reprovadas tambem vao pro Notion: e isso que permite calibrar a rubrica depois.\nconst out = [];\nfor (const item of $input.all()) {\n  const v = item.json;\n  const body = {\n    parent: { database_id: '3a78b3ec-a1b8-810f-ac9f-ff3ec411949d' },\n    properties: {\n      'Nome da vaga': { title: [{ text: { content: String(v.title).slice(0, 1900) } }] },\n      'Job ID': { rich_text: [{ text: { content: String(v.jobId) } }] },\n      'Plataforma': { select: { name: 'Upwork' } },\n      'Data de captura': { date: { start: new Date().toISOString() } },\n      'Score': { number: Number(v.score || 0) },\n      'Status': { select: { name: 'Arquivada' } },\n      'Orcamento': { rich_text: [{ text: { content: String(v.orcamento) } }] },\n      'Link da vaga': { url: String(v.url) },\n      'Pagamento verificado': { checkbox: !!v.clientPaymentVerified },\n      'Pais do cliente': { rich_text: [{ text: { content: String(v.clientCountry) } }] },\n      'Cliente gastou USD': { number: Number(v.clientTotalSpent || 0) },\n      'Propostas': { number: Number(v.totalApplicants || 0) },\n      'Complexidade': { select: { name: String(v.complexity || 'medium') } },\n      'Horas estimadas': { number: Number(v.estimated_hours || 0) },\n      'Red flags': { rich_text: [{ text: { content: String((v.red_flags || []).join('; ') + ' | ' + v.why).slice(0, 1900) } }] },\n      'Recomendacao': { select: { name: 'skip' } }\n    }\n  };\n  out.push({ json: { notionBody: body } });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "n14",
+      "name": "Notion - Arquiva Reprovada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1380,
+        140
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.notionBody) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "T2U1ZJyf8wYB0eGu",
+          "name": "Notion API"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cron 10min (pico US)": {
+      "main": [
+        [
+          {
+            "node": "Apify - Upwork Vagas Frescas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apify - Upwork Vagas Frescas": {
+      "main": [
+        [
+          {
+            "node": "Pre-filtro + Monta Prompt Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-filtro + Monta Prompt Score": {
+      "main": [
+        [
+          {
+            "node": "Notion - Dedup por Job ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion - Dedup por Job ID": {
+      "main": [
+        [
+          {
+            "node": "Filtra Ineditas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtra Ineditas": {
+      "main": [
+        [
+          {
+            "node": "Claude - Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude - Score": {
+      "main": [
+        [
+          {
+            "node": "Parse Score + Monta Prompt Proposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Score + Monta Prompt Proposta": {
+      "main": [
+        [
+          {
+            "node": "IF score >= 7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF score >= 7": {
+      "main": [
+        [
+          {
+            "node": "Claude - Escreve Proposta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Monta Arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude - Escreve Proposta": {
+      "main": [
+        [
+          {
+            "node": "Monta Registro e Alerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta Registro e Alerta": {
+      "main": [
+        [
+          {
+            "node": "Notion - Cria Vaga Qualificada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion - Cria Vaga Qualificada": {
+      "main": [
+        [
+          {
+            "node": "Telegram - Alerta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta Arquivo": {
+      "main": [
+        [
+          {
+            "node": "Notion - Arquiva Reprovada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>graphify - graphify-out\graph.html</title>
+<script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"
+        integrity="sha384-Ux6phic9PEHJ38YtrijhkzyJ8yQlH8i/+buBR8s3mAZOJrP1gwyvAcIYl3GWtpX1"
+        crossorigin="anonymous"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f1a; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; height: 100vh; overflow: hidden; }
+  #graph { flex: 1; }
+  #sidebar { width: 280px; background: #1a1a2e; border-left: 1px solid #2a2a4e; display: flex; flex-direction: column; overflow: hidden; }
+  #search-wrap { padding: 12px; border-bottom: 1px solid #2a2a4e; }
+  #search { width: 100%; background: #0f0f1a; border: 1px solid #3a3a5e; color: #e0e0e0; padding: 7px 10px; border-radius: 6px; font-size: 13px; outline: none; }
+  #search:focus { border-color: #4E79A7; }
+  #search-results { max-height: 140px; overflow-y: auto; padding: 4px 12px; border-bottom: 1px solid #2a2a4e; display: none; }
+  .search-item { padding: 4px 6px; cursor: pointer; border-radius: 4px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .search-item:hover { background: #2a2a4e; }
+  #info-panel { padding: 14px; border-bottom: 1px solid #2a2a4e; min-height: 140px; }
+  #info-panel h3 { font-size: 13px; color: #aaa; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  #info-content { font-size: 13px; color: #ccc; line-height: 1.6; }
+  #info-content .field { margin-bottom: 5px; }
+  #info-content .field b { color: #e0e0e0; }
+  #info-content .empty { color: #555; font-style: italic; }
+  .neighbor-link { display: block; padding: 2px 6px; margin: 2px 0; border-radius: 3px; cursor: pointer; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid #333; }
+  .neighbor-link:hover { background: #2a2a4e; }
+  #neighbors-list { max-height: 160px; overflow-y: auto; margin-top: 4px; }
+  #legend-wrap { flex: 1; overflow-y: auto; padding: 12px; }
+  #legend-wrap h3 { font-size: 13px; color: #aaa; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; border-radius: 4px; font-size: 12px; }
+  .legend-item:hover { background: #2a2a4e; padding-left: 4px; }
+  .legend-item.dimmed { opacity: 0.35; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .legend-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .legend-count { color: #666; font-size: 11px; }
+  #stats { padding: 10px 14px; border-top: 1px solid #2a2a4e; font-size: 11px; color: #555; }
+  #legend-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 4px 0; }
+  #legend-controls label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: #aaa; user-select: none; }
+  #legend-controls label:hover { color: #e0e0e0; }
+  .legend-cb, #select-all-cb { appearance: none; -webkit-appearance: none; width: 14px; height: 14px; border: 1.5px solid #3a3a5e; border-radius: 3px; background: #0f0f1a; cursor: pointer; position: relative; flex-shrink: 0; }
+  .legend-cb:checked, #select-all-cb:checked { background: #4E79A7; border-color: #4E79A7; }
+  .legend-cb:checked::after, #select-all-cb:checked::after { content: ''; position: absolute; left: 3.5px; top: 1px; width: 4px; height: 7px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  #select-all-cb:indeterminate { background: #4E79A7; border-color: #4E79A7; }
+  #select-all-cb:indeterminate::after { content: ''; position: absolute; left: 2px; top: 5px; width: 8px; height: 2px; background: #fff; border: none; transform: none; }
+</style>
+</head>
+<body>
+<div id="graph"></div>
+<div id="sidebar">
+  <div id="search-wrap">
+    <input id="search" type="text" placeholder="Search nodes..." autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+  <div id="info-panel">
+    <h3>Node Info</h3>
+    <div id="info-content"><span class="empty">Click a node to inspect it</span></div>
+  </div>
+  <div id="legend-wrap">
+    <h3>Communities</h3>
+    <div id="legend-controls">
+      <label><input type="checkbox" id="select-all-cb" checked onchange="toggleAllCommunities(!this.checked)">Select All</label>
+    </div>
+    <div id="legend"></div>
+  </div>
+  <div id="stats">41 nodes &middot; 57 edges &middot; 6 communities</div>
+</div>
+<script>
+const RAW_NODES = [{"id": "claude_n8n_workflow_guidelines", "label": "n8n Workflow Build Guidelines", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 25.0, "font": {"size": 12, "color": "#ffffff"}, "title": "n8n Workflow Build Guidelines", "community": 4, "community_name": "Diretrizes de Engenharia", "source_file": "CLAUDE.md", "file_type": "rationale", "degree": 5}, {"id": "claude_templates_first", "label": "Templates First Principle", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "Templates First Principle", "community": 4, "community_name": "Diretrizes de Engenharia", "source_file": "CLAUDE.md", "file_type": "rationale", "degree": 1}, {"id": "claude_never_trust_defaults", "label": "Never Trust Defaults", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Never Trust Defaults", "community": 4, "community_name": "Diretrizes de Engenharia", "source_file": "CLAUDE.md", "file_type": "rationale", "degree": 2}, {"id": "claude_multi_level_validation", "label": "Multi-Level Node/Workflow Validation", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Multi-Level Node/Workflow Validation", "community": 4, "community_name": "Diretrizes de Engenharia", "source_file": "CLAUDE.md", "file_type": "rationale", "degree": 2}, {"id": "claude_surgical_changes", "label": "Surgical Changes Principle", "color": {"background": "#59A14F", "border": "#59A14F", "highlight": {"background": "#ffffff", "border": "#59A14F"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "Surgical Changes Principle", "community": 4, "community_name": "Diretrizes de Engenharia", "source_file": "CLAUDE.md", "file_type": "rationale", "degree": 1}, {"id": "netvar_absichtserklaerung_template_absichtserklaerung", "label": "Absichtserkl\u00e4rung (Letter of Intent) Template", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 22.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Absichtserkl\u00e4rung (Letter of Intent) Template", "community": 0, "community_name": "Visto e Prova Documental", "source_file": "Netvar_Absichtserklaerung_Template.md", "file_type": "document", "degree": 4}, {"id": "netvar_absichtserklaerung_template_freiberufler_visum", "label": "\u00a721 AufenthG Freiberufler Visum", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\u00a721 AufenthG Freiberufler Visum", "community": 0, "community_name": "Visto e Prova Documental", "source_file": "Netvar_Absichtserklaerung_Template.md", "file_type": "concept", "degree": 2}, {"id": "netvar_absichtserklaerung_template_hierarquia_da_prova", "label": "Hierarquia da Prova (Evidence Hierarchy for Visa)", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Hierarquia da Prova (Evidence Hierarchy for Visa)", "community": 0, "community_name": "Visto e Prova Documental", "source_file": "Netvar_Absichtserklaerung_Template.md", "file_type": "rationale", "degree": 2}, {"id": "netvar_absichtserklaerung_template_partnerrabatt", "label": "Partnerrabatt (Partnership Discount 5-15%)", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Partnerrabatt (Partnership Discount 5-15%)", "community": 0, "community_name": "Visto e Prova Documental", "source_file": "Netvar_Absichtserklaerung_Template.md", "file_type": "rationale", "degree": 2}, {"id": "netvar_angebot_template_angebot", "label": "Angebot (Offer) Template", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 34.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Angebot (Offer) Template", "community": 1, "community_name": "Proposta e Fechamento", "source_file": "Netvar_Angebot_Template.md", "file_type": "document", "degree": 8}, {"id": "netvar_angebot_template_kleinunternehmerregelung", "label": "\u00a719 UStG Kleinunternehmerregelung", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "\u00a719 UStG Kleinunternehmerregelung", "community": 1, "community_name": "Proposta e Fechamento", "source_file": "Netvar_Angebot_Template.md", "file_type": "concept", "degree": 1}, {"id": "netvar_angebot_template_kategorie_der_schmerzen", "label": "Categoria de Dor (Sem Site / Zumbi / Lento)", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Categoria de Dor (Sem Site / Zumbi / Lento)", "community": 1, "community_name": "Proposta e Fechamento", "source_file": "Netvar_Angebot_Template.md", "file_type": "concept", "degree": 2}, {"id": "netvar_angebot_template_zahlungsbedingungen", "label": "Zahlungsbedingungen 50/50 (Stripe/PayPal)", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Zahlungsbedingungen 50/50 (Stripe/PayPal)", "community": 1, "community_name": "Proposta e Fechamento", "source_file": "Netvar_Angebot_Template.md", "file_type": "concept", "degree": 2}, {"id": "netvar_consulta_advogado_uwg_consulta", "label": "Consulta Jur\u00eddica UWG/DSGVO", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 28.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Consulta Jur\u00eddica UWG/DSGVO", "community": 0, "community_name": "Visto e Prova Documental", "source_file": "Netvar_Consulta_Advogado_UWG.md", "file_type": "document", "degree": 6}, {"id": "netvar_consulta_advogado_uwg_par7_uwg", "label": "\u00a77 Abs. 2 Nr. 2 UWG (Cold Email Consent)", "color": {"background": "#EDC948", "border": "#EDC948", "highlight": {"background": "#ffffff", "border": "#EDC948"}}, "size": 25.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\u00a77 Abs. 2 Nr. 2 UWG (Cold Email Consent)", "community": 5, "community_name": "Risco UWG e Canal de Contato", "source_file": "Netvar_Consulta_Advogado_UWG.md", "file_type": "concept", "degree": 5}, {"id": "netvar_consulta_advogado_uwg_abmahnung", "label": "Abmahnung Risk", "color": {"background": "#EDC948", "border": "#EDC948", "highlight": {"background": "#ffffff", "border": "#EDC948"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "Abmahnung Risk", "community": 5, "community_name": "Risco UWG e Canal de Contato", "source_file": "Netvar_Consulta_Advogado_UWG.md", "file_type": "concept", "degree": 1}, {"id": "netvar_consulta_advogado_uwg_art14_dsgvo", "label": "Art. 14 DSGVO Informationspflicht", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Art. 14 DSGVO Informationspflicht", "community": 0, "community_name": "Visto e Prova Documental", "source_file": "Netvar_Consulta_Advogado_UWG.md", "file_type": "concept", "degree": 2}, {"id": "netvar_consulta_advogado_uwg_telefonische_kaltakquise", "label": "Telefonische Kaltakquise (\u00a77 Abs.2 Nr.1 UWG)", "color": {"background": "#EDC948", "border": "#EDC948", "highlight": {"background": "#ffffff", "border": "#EDC948"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "Telefonische Kaltakquise (\u00a77 Abs.2 Nr.1 UWG)", "community": 5, "community_name": "Risco UWG e Canal de Contato", "source_file": "Netvar_Consulta_Advogado_UWG.md", "file_type": "rationale", "degree": 1}, {"id": "netvar_consulta_advogado_uwg_olg_hamm_18u15422", "label": "OLG Hamm 18 U 154/22 (DMs as elektronische Post)", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "OLG Hamm 18 U 154/22 (DMs as elektronische Post)", "community": 0, "community_name": "Visto e Prova Documental", "source_file": "Netvar_Consulta_Advogado_UWG.md", "file_type": "paper", "degree": 1}, {"id": "netvar_consulta_advogado_uwg_par5_ddg_impressum", "label": "\u00a75 DDG Impressum / Virtuelle Adresse (Clevver)", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "\u00a75 DDG Impressum / Virtuelle Adresse (Clevver)", "community": 0, "community_name": "Visto e Prova Documental", "source_file": "Netvar_Consulta_Advogado_UWG.md", "file_type": "concept", "degree": 2}, {"id": "netvar_consulta_advogado_uwg_freiberufler_vs_gewerbe", "label": "Freiberufler vs Gewerbe (\u00a718 EStG)", "color": {"background": "#4E79A7", "border": "#4E79A7", "highlight": {"background": "#ffffff", "border": "#4E79A7"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Freiberufler vs Gewerbe (\u00a718 EStG)", "community": 0, "community_name": "Visto e Prova Documental", "source_file": "Netvar_Consulta_Advogado_UWG.md", "file_type": "concept", "degree": 2}, {"id": "netvar_entrega_e_assinatura_uma_entrega_ativa", "label": "Uma Entrega Ativa por Vez (WIP=1 Capacity Rule)", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Uma Entrega Ativa por Vez (WIP=1 Capacity Rule)", "community": 2, "community_name": "Entrega e Modelo de Cobranca", "source_file": "Netvar_Entrega_e_Assinatura.md", "file_type": "rationale", "degree": 2}, {"id": "netvar_entrega_e_assinatura_netvar_entregas_base", "label": "Notion Base: Netvar Entregas", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 22.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Notion Base: Netvar Entregas", "community": 2, "community_name": "Entrega e Modelo de Cobranca", "source_file": "Netvar_Entrega_e_Assinatura.md", "file_type": "document", "degree": 4}, {"id": "netvar_entrega_e_assinatura_promessa_48h", "label": "Promessa das 48h (48h ap\u00f3s briefing completo)", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Promessa das 48h (48h ap\u00f3s briefing completo)", "community": 2, "community_name": "Entrega e Modelo de Cobranca", "source_file": "Netvar_Entrega_e_Assinatura.md", "file_type": "rationale", "degree": 2}, {"id": "netvar_entrega_e_assinatura_website_abo", "label": "Website-Abo \u20ac99/m\u00eas (Subscription Model)", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 25.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Website-Abo \u20ac99/m\u00eas (Subscription Model)", "community": 2, "community_name": "Entrega e Modelo de Cobranca", "source_file": "Netvar_Entrega_e_Assinatura.md", "file_type": "concept", "degree": 5}, {"id": "netvar_entrega_e_assinatura_einmalig_1190", "label": "Einmalig ab \u20ac1.190 (One-off Anchor Price)", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "Einmalig ab \u20ac1.190 (One-off Anchor Price)", "community": 2, "community_name": "Entrega e Modelo de Cobranca", "source_file": "Netvar_Entrega_e_Assinatura.md", "file_type": "rationale", "degree": 1}, {"id": "netvar_entrega_e_assinatura_anti_lockin", "label": "Anti-Lock-in Positioning (Monatlich k\u00fcndbar, Domain do cliente)", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "Anti-Lock-in Positioning (Monatlich k\u00fcndbar, Domain do cliente)", "community": 2, "community_name": "Entrega e Modelo de Cobranca", "source_file": "Netvar_Entrega_e_Assinatura.md", "file_type": "rationale", "degree": 1}, {"id": "netvar_entrega_e_assinatura_konzeptentwuerfe", "label": "Tr\u00eas Konzeptentw\u00fcrfe por Nicho", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "Tr\u00eas Konzeptentw\u00fcrfe por Nicho", "community": 2, "community_name": "Entrega e Modelo de Cobranca", "source_file": "Netvar_Entrega_e_Assinatura.md", "file_type": "concept", "degree": 1}, {"id": "netvar_processo_resposta_fechamento_processo1", "label": "Processo Resposta \u2192 Proposta \u2192 Fechamento", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 22.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Processo Resposta \u2192 Proposta \u2192 Fechamento", "community": 1, "community_name": "Proposta e Fechamento", "source_file": "Netvar_Processo_Resposta_Fechamento.md", "file_type": "concept", "degree": 4}, {"id": "netvar_processo_resposta_fechamento_classificacao_resposta", "label": "Classifica\u00e7\u00e3o de Resposta por Claude", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Classifica\u00e7\u00e3o de Resposta por Claude", "community": 1, "community_name": "Proposta e Fechamento", "source_file": "Netvar_Processo_Resposta_Fechamento.md", "file_type": "concept", "degree": 2}, {"id": "netvar_processo_resposta_fechamento_wf_resumo_diario", "label": "WF - Resumo Di\u00e1rio", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "WF - Resumo Di\u00e1rio", "community": 3, "community_name": "Pipeline de Prospeccao n8n", "source_file": "Netvar_Processo_Resposta_Fechamento.md", "file_type": "concept", "degree": 2}, {"id": "netvar_processo_resposta_fechamento_revisao_humana", "label": "Revis\u00e3o Humana Obrigat\u00f3ria do Angebot", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "Revis\u00e3o Humana Obrigat\u00f3ria do Angebot", "community": 1, "community_name": "Proposta e Fechamento", "source_file": "Netvar_Processo_Resposta_Fechamento.md", "file_type": "rationale", "degree": 1}, {"id": "status_netvar_studio_status", "label": "Status do Projeto Netvar Studio", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 22.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Status do Projeto Netvar Studio", "community": 3, "community_name": "Pipeline de Prospeccao n8n", "source_file": "STATUS_NETVAR_STUDIO.md", "file_type": "document", "degree": 4}, {"id": "status_netvar_studio_wf1_prospeccao", "label": "Workflow 1 \u2014 Prospec\u00e7\u00e3o", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 40.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Workflow 1 \u2014 Prospec\u00e7\u00e3o", "community": 3, "community_name": "Pipeline de Prospeccao n8n", "source_file": "STATUS_NETVAR_STUDIO.md", "file_type": "concept", "degree": 10}, {"id": "status_netvar_studio_wf2_followup", "label": "Workflow 2 \u2014 Follow-up", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 22.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Workflow 2 \u2014 Follow-up", "community": 3, "community_name": "Pipeline de Prospeccao n8n", "source_file": "STATUS_NETVAR_STUDIO.md", "file_type": "concept", "degree": 4}, {"id": "status_netvar_studio_wf3_onboarding", "label": "Workflow 3 \u2014 Onboarding p\u00f3s-pagamento", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 25.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Workflow 3 \u2014 Onboarding p\u00f3s-pagamento", "community": 1, "community_name": "Proposta e Fechamento", "source_file": "STATUS_NETVAR_STUDIO.md", "file_type": "concept", "degree": 5}, {"id": "status_netvar_studio_crm_leads_notion", "label": "Notion CRM: Leads Netvar Studio", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 28.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Notion CRM: Leads Netvar Studio", "community": 3, "community_name": "Pipeline de Prospeccao n8n", "source_file": "STATUS_NETVAR_STUDIO.md", "file_type": "document", "degree": 6}, {"id": "status_netvar_studio_sliplane_hosting", "label": "Sliplane n8n Hosting", "color": {"background": "#76B7B2", "border": "#76B7B2", "highlight": {"background": "#ffffff", "border": "#76B7B2"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "Sliplane n8n Hosting", "community": 3, "community_name": "Pipeline de Prospeccao n8n", "source_file": "STATUS_NETVAR_STUDIO.md", "file_type": "concept", "degree": 1}, {"id": "status_netvar_studio_webhook_hmac_verification", "label": "Stripe/PayPal Webhook Signature Verification", "color": {"background": "#F28E2B", "border": "#F28E2B", "highlight": {"background": "#ffffff", "border": "#F28E2B"}}, "size": 13.0, "font": {"size": 0, "color": "#ffffff"}, "title": "Stripe/PayPal Webhook Signature Verification", "community": 1, "community_name": "Proposta e Fechamento", "source_file": "STATUS_NETVAR_STUDIO.md", "file_type": "concept", "degree": 1}, {"id": "status_netvar_studio_ramp_aquecimento", "label": "Ramp de Aquecimento de Envio (5\u219220/dia)", "color": {"background": "#EDC948", "border": "#EDC948", "highlight": {"background": "#ffffff", "border": "#EDC948"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Ramp de Aquecimento de Envio (5\u219220/dia)", "community": 5, "community_name": "Risco UWG e Canal de Contato", "source_file": "STATUS_NETVAR_STUDIO.md", "file_type": "rationale", "degree": 2}, {"id": "status_netvar_studio_assets_form", "label": "Formul\u00e1rio de Assets (assets.html)", "color": {"background": "#E15759", "border": "#E15759", "highlight": {"background": "#ffffff", "border": "#E15759"}}, "size": 16.0, "font": {"size": 12, "color": "#ffffff"}, "title": "Formul\u00e1rio de Assets (assets.html)", "community": 2, "community_name": "Entrega e Modelo de Cobranca", "source_file": "STATUS_NETVAR_STUDIO.md", "file_type": "concept", "degree": 2}];
+const RAW_EDGES = [{"from": "claude_n8n_workflow_guidelines", "to": "claude_multi_level_validation", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "claude_n8n_workflow_guidelines", "to": "claude_never_trust_defaults", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "claude_n8n_workflow_guidelines", "to": "claude_templates_first", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "claude_n8n_workflow_guidelines", "to": "status_netvar_studio_wf1_prospeccao", "label": "conceptually_related_to", "title": "conceptually_related_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "claude_n8n_workflow_guidelines", "to": "claude_surgical_changes", "label": "rationale_for", "title": "rationale_for [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "claude_never_trust_defaults", "to": "claude_multi_level_validation", "label": "conceptually_related_to", "title": "conceptually_related_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "netvar_absichtserklaerung_template_absichtserklaerung", "to": "netvar_absichtserklaerung_template_freiberufler_visum", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_absichtserklaerung_template_absichtserklaerung", "to": "netvar_absichtserklaerung_template_hierarquia_da_prova", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_absichtserklaerung_template_absichtserklaerung", "to": "netvar_absichtserklaerung_template_partnerrabatt", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_absichtserklaerung_template_absichtserklaerung", "to": "netvar_consulta_advogado_uwg_consulta", "label": "cites", "title": "cites [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_absichtserklaerung_template_freiberufler_visum", "to": "netvar_consulta_advogado_uwg_freiberufler_vs_gewerbe", "label": "conceptually_related_to", "title": "conceptually_related_to [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_absichtserklaerung_template_hierarquia_da_prova", "to": "netvar_entrega_e_assinatura_website_abo", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_absichtserklaerung_template_partnerrabatt", "to": "netvar_angebot_template_angebot", "label": "semantically_similar_to", "title": "semantically_similar_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "netvar_angebot_template_angebot", "to": "netvar_angebot_template_kategorie_der_schmerzen", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_angebot_template_angebot", "to": "netvar_angebot_template_kleinunternehmerregelung", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_angebot_template_angebot", "to": "netvar_angebot_template_zahlungsbedingungen", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_angebot_template_angebot", "to": "status_netvar_studio_crm_leads_notion", "label": "shares_data_with", "title": "shares_data_with [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_angebot_template_angebot", "to": "status_netvar_studio_wf1_prospeccao", "label": "shares_data_with", "title": "shares_data_with [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_angebot_template_angebot", "to": "netvar_entrega_e_assinatura_website_abo", "label": "semantically_similar_to", "title": "semantically_similar_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "netvar_angebot_template_angebot", "to": "netvar_processo_resposta_fechamento_processo1", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_angebot_template_kategorie_der_schmerzen", "to": "status_netvar_studio_wf1_prospeccao", "label": "shares_data_with", "title": "shares_data_with [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_angebot_template_zahlungsbedingungen", "to": "status_netvar_studio_wf3_onboarding", "label": "conceptually_related_to", "title": "conceptually_related_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "netvar_consulta_advogado_uwg_consulta", "to": "netvar_consulta_advogado_uwg_art14_dsgvo", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_consulta_advogado_uwg_consulta", "to": "netvar_consulta_advogado_uwg_freiberufler_vs_gewerbe", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_consulta_advogado_uwg_consulta", "to": "netvar_consulta_advogado_uwg_olg_hamm_18u15422", "label": "cites", "title": "cites [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_consulta_advogado_uwg_consulta", "to": "netvar_consulta_advogado_uwg_par5_ddg_impressum", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_consulta_advogado_uwg_consulta", "to": "netvar_consulta_advogado_uwg_par7_uwg", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_consulta_advogado_uwg_par7_uwg", "to": "netvar_consulta_advogado_uwg_abmahnung", "label": "conceptually_related_to", "title": "conceptually_related_to [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_consulta_advogado_uwg_par7_uwg", "to": "status_netvar_studio_wf1_prospeccao", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_consulta_advogado_uwg_par7_uwg", "to": "netvar_consulta_advogado_uwg_telefonische_kaltakquise", "label": "conceptually_related_to", "title": "conceptually_related_to [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_consulta_advogado_uwg_par7_uwg", "to": "status_netvar_studio_ramp_aquecimento", "label": "conceptually_related_to", "title": "conceptually_related_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "netvar_consulta_advogado_uwg_art14_dsgvo", "to": "status_netvar_studio_crm_leads_notion", "label": "references", "title": "references [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "netvar_consulta_advogado_uwg_par5_ddg_impressum", "to": "status_netvar_studio_status", "label": "references", "title": "references [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "netvar_entrega_e_assinatura_uma_entrega_ativa", "to": "netvar_entrega_e_assinatura_netvar_entregas_base", "label": "implements", "title": "implements [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_entrega_e_assinatura_uma_entrega_ativa", "to": "netvar_entrega_e_assinatura_website_abo", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_entrega_e_assinatura_netvar_entregas_base", "to": "status_netvar_studio_assets_form", "label": "shares_data_with", "title": "shares_data_with [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "netvar_entrega_e_assinatura_netvar_entregas_base", "to": "status_netvar_studio_crm_leads_notion", "label": "semantically_similar_to", "title": "semantically_similar_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "netvar_entrega_e_assinatura_netvar_entregas_base", "to": "netvar_entrega_e_assinatura_promessa_48h", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_entrega_e_assinatura_promessa_48h", "to": "netvar_entrega_e_assinatura_konzeptentwuerfe", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_entrega_e_assinatura_website_abo", "to": "netvar_entrega_e_assinatura_anti_lockin", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_entrega_e_assinatura_website_abo", "to": "netvar_entrega_e_assinatura_einmalig_1190", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_processo_resposta_fechamento_processo1", "to": "netvar_processo_resposta_fechamento_classificacao_resposta", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_processo_resposta_fechamento_processo1", "to": "status_netvar_studio_wf3_onboarding", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_processo_resposta_fechamento_processo1", "to": "netvar_processo_resposta_fechamento_revisao_humana", "label": "rationale_for", "title": "rationale_for [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_processo_resposta_fechamento_classificacao_resposta", "to": "status_netvar_studio_wf2_followup", "label": "semantically_similar_to", "title": "semantically_similar_to [INFERRED]", "dashes": true, "width": 1, "color": {"opacity": 0.35}, "confidence": "INFERRED"}, {"from": "netvar_processo_resposta_fechamento_wf_resumo_diario", "to": "status_netvar_studio_crm_leads_notion", "label": "shares_data_with", "title": "shares_data_with [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "netvar_processo_resposta_fechamento_wf_resumo_diario", "to": "status_netvar_studio_wf1_prospeccao", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "status_netvar_studio_status", "to": "status_netvar_studio_wf1_prospeccao", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "status_netvar_studio_status", "to": "status_netvar_studio_wf2_followup", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "status_netvar_studio_status", "to": "status_netvar_studio_wf3_onboarding", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "status_netvar_studio_wf1_prospeccao", "to": "status_netvar_studio_crm_leads_notion", "label": "shares_data_with", "title": "shares_data_with [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "status_netvar_studio_wf1_prospeccao", "to": "status_netvar_studio_ramp_aquecimento", "label": "implements", "title": "implements [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "status_netvar_studio_wf1_prospeccao", "to": "status_netvar_studio_sliplane_hosting", "label": "references", "title": "references [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "status_netvar_studio_wf1_prospeccao", "to": "status_netvar_studio_wf2_followup", "label": "shares_data_with", "title": "shares_data_with [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "status_netvar_studio_wf2_followup", "to": "status_netvar_studio_crm_leads_notion", "label": "shares_data_with", "title": "shares_data_with [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "status_netvar_studio_wf3_onboarding", "to": "status_netvar_studio_assets_form", "label": "shares_data_with", "title": "shares_data_with [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}, {"from": "status_netvar_studio_wf3_onboarding", "to": "status_netvar_studio_webhook_hmac_verification", "label": "implements", "title": "implements [EXTRACTED]", "dashes": false, "width": 2, "color": {"opacity": 0.7}, "confidence": "EXTRACTED"}];
+const LEGEND = [{"cid": 0, "color": "#4E79A7", "label": "Visto e Prova Documental", "count": 9}, {"cid": 1, "color": "#F28E2B", "label": "Proposta e Fechamento", "count": 9}, {"cid": 2, "color": "#E15759", "label": "Entrega e Modelo de Cobranca", "count": 8}, {"cid": 3, "color": "#76B7B2", "label": "Pipeline de Prospeccao n8n", "count": 6}, {"cid": 4, "color": "#59A14F", "label": "Diretrizes de Engenharia", "count": 5}, {"cid": 5, "color": "#EDC948", "label": "Risco UWG e Canal de Contato", "count": 4}];
+
+// HTML-escape helper — prevents XSS when injecting graph data into innerHTML
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Build vis datasets
+const nodesDS = new vis.DataSet(RAW_NODES.map(n => ({
+  id: n.id, label: n.label, color: n.color, size: n.size,
+  font: n.font, title: n.title,
+  _community: n.community, _community_name: n.community_name,
+  _source_file: n.source_file, _file_type: n.file_type, _degree: n.degree,
+})));
+
+const edgesDS = new vis.DataSet(RAW_EDGES.map((e, i) => ({
+  id: i, from: e.from, to: e.to,
+  label: '',
+  title: e.title,
+  dashes: e.dashes,
+  width: e.width,
+  color: e.color,
+  arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+})));
+
+const container = document.getElementById('graph');
+const network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, {
+  physics: {
+    enabled: true,
+    solver: 'forceAtlas2Based',
+    forceAtlas2Based: {
+      gravitationalConstant: -60,
+      centralGravity: 0.005,
+      springLength: 120,
+      springConstant: 0.08,
+      damping: 0.4,
+      avoidOverlap: 0.8,
+    },
+    stabilization: { iterations: 200, fit: true },
+  },
+  interaction: {
+    hover: true,
+    tooltipDelay: 100,
+    hideEdgesOnDrag: true,
+    navigationButtons: false,
+    keyboard: false,
+  },
+  nodes: { shape: 'dot', borderWidth: 1.5 },
+  edges: { smooth: { type: 'continuous', roundness: 0.2 }, selectionWidth: 3 },
+});
+
+network.once('stabilizationIterationsDone', () => {
+  network.setOptions({ physics: { enabled: false } });
+});
+
+function showInfo(nodeId) {
+  const n = nodesDS.get(nodeId);
+  if (!n) return;
+  const neighborIds = network.getConnectedNodes(nodeId);
+  const neighborItems = neighborIds.map(nid => {
+    const nb = nodesDS.get(nid);
+    const color = nb ? nb.color.background : '#555';
+    return `<span class="neighbor-link" style="border-left-color:${esc(color)}" data-nid="${esc(nid)}">${esc(nb ? nb.label : nid)}</span>`;
+  }).join('');
+  document.getElementById('info-content').innerHTML = `
+    <div class="field"><b>${esc(n.label)}</b></div>
+    <div class="field">Type: ${esc(n._file_type || 'unknown')}</div>
+    <div class="field">Community: ${esc(n._community_name)}</div>
+    <div class="field">Source: ${esc(n._source_file || '-')}</div>
+    <div class="field">Degree: ${n._degree}</div>
+    ${neighborIds.length ? `<div class="field" style="margin-top:8px;color:#aaa;font-size:11px">Neighbors (${neighborIds.length})</div><div id="neighbors-list">${neighborItems}</div>` : ''}
+  `;
+}
+
+function focusNode(nodeId) {
+  network.focus(nodeId, { scale: 1.4, animation: true });
+  network.selectNodes([nodeId]);
+  showInfo(nodeId);
+}
+
+// Neighbor links use a data attribute + one delegated listener rather than an
+// inline onclick. A node id/label sourced from a document or a scraped URL
+// (graphify add) can contain a double-quote; dropping the stringified id
+// unescaped into a quoted onclick both broke every link and allowed a hostile
+// source to inject an event handler into the local report (stored XSS, #1838).
+// esc() on data-nid keeps the value inside the attribute; the listener reads it
+// back verbatim. Bound to document so it survives the innerHTML rebuild that
+// recreates #neighbors-list on each showInfo().
+document.addEventListener('click', e => {
+  const el = e.target.closest('.neighbor-link');
+  if (el && el.dataset.nid !== undefined) focusNode(el.dataset.nid);
+});
+
+// Track hovered node — hover detection is more reliable than click params
+let hoveredNodeId = null;
+network.on('hoverNode', params => {
+  hoveredNodeId = params.node;
+  container.style.cursor = 'pointer';
+});
+network.on('blurNode', () => {
+  hoveredNodeId = null;
+  container.style.cursor = 'default';
+});
+container.addEventListener('click', () => {
+  if (hoveredNodeId !== null) {
+    showInfo(hoveredNodeId);
+    network.selectNodes([hoveredNodeId]);
+  }
+});
+network.on('click', params => {
+  if (params.nodes.length > 0) {
+    showInfo(params.nodes[0]);
+  } else if (hoveredNodeId === null) {
+    document.getElementById('info-content').innerHTML = '<span class="empty">Click a node to inspect it</span>';
+  }
+});
+
+const searchInput = document.getElementById('search');
+const searchResults = document.getElementById('search-results');
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.toLowerCase().trim();
+  searchResults.innerHTML = '';
+  if (!q) { searchResults.style.display = 'none'; return; }
+  const matches = RAW_NODES.filter(n => n.label.toLowerCase().includes(q)).slice(0, 20);
+  if (!matches.length) { searchResults.style.display = 'none'; return; }
+  searchResults.style.display = 'block';
+  matches.forEach(n => {
+    const el = document.createElement('div');
+    el.className = 'search-item';
+    el.textContent = n.label;
+    el.style.borderLeft = `3px solid ${n.color.background}`;
+    el.style.paddingLeft = '8px';
+    el.onclick = () => {
+      network.focus(n.id, { scale: 1.5, animation: true });
+      network.selectNodes([n.id]);
+      showInfo(n.id);
+      searchResults.style.display = 'none';
+      searchInput.value = '';
+    };
+    searchResults.appendChild(el);
+  });
+});
+document.addEventListener('click', e => {
+  if (!searchResults.contains(e.target) && e.target !== searchInput)
+    searchResults.style.display = 'none';
+});
+
+const hiddenCommunities = new Set();
+
+const selectAllCb = document.getElementById('select-all-cb');
+
+function updateSelectAllState() {
+  const total = LEGEND.length;
+  const hidden = hiddenCommunities.size;
+  selectAllCb.checked = hidden === 0;
+  selectAllCb.indeterminate = hidden > 0 && hidden < total;
+}
+
+function toggleAllCommunities(hide) {
+  document.querySelectorAll('.legend-item').forEach(item => {
+    hide ? item.classList.add('dimmed') : item.classList.remove('dimmed');
+  });
+  document.querySelectorAll('.legend-cb').forEach(cb => {
+    cb.checked = !hide;
+  });
+  LEGEND.forEach(c => {
+    if (hide) hiddenCommunities.add(c.cid); else hiddenCommunities.delete(c.cid);
+  });
+  const updates = RAW_NODES.map(n => ({ id: n.id, hidden: hide }));
+  nodesDS.update(updates);
+  updateSelectAllState();
+}
+
+const legendEl = document.getElementById('legend');
+LEGEND.forEach(c => {
+  const item = document.createElement('div');
+  item.className = 'legend-item';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'legend-cb';
+  cb.checked = true;
+  cb.addEventListener('change', (e) => {
+    e.stopPropagation();
+    if (cb.checked) {
+      hiddenCommunities.delete(c.cid);
+      item.classList.remove('dimmed');
+    } else {
+      hiddenCommunities.add(c.cid);
+      item.classList.add('dimmed');
+    }
+    const updates = RAW_NODES
+      .filter(n => n.community === c.cid)
+      .map(n => ({ id: n.id, hidden: !cb.checked }));
+    nodesDS.update(updates);
+    updateSelectAllState();
+  });
+  item.innerHTML = `<div class="legend-dot" style="background:${c.color}"></div>
+    <span class="legend-label">${c.label}</span>
+    <span class="legend-count">${c.count}</span>`;
+  item.prepend(cb);
+  item.onclick = (e) => {
+    if (e.target === cb) return;
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change'));
+  };
+  legendEl.appendChild(item);
+});
+</script>
+<script>
+// Render hyperedges as shaded regions
+const hyperedges = [{"id": "netvar_prospecting_pipeline", "label": "Netvar Cold-Outreach to Cash Pipeline", "nodes": ["status_netvar_studio_wf1_prospeccao", "status_netvar_studio_wf2_followup", "netvar_processo_resposta_fechamento_processo1", "netvar_angebot_template_angebot", "status_netvar_studio_wf3_onboarding", "status_netvar_studio_crm_leads_notion"], "relation": "form", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "Netvar_Processo_Resposta_Fechamento.md"}, {"id": "netvar_german_legal_exposure", "label": "German Legal Exposure Surface (UWG/DSGVO/DDG/Visa)", "nodes": ["netvar_consulta_advogado_uwg_par7_uwg", "netvar_consulta_advogado_uwg_art14_dsgvo", "netvar_consulta_advogado_uwg_par5_ddg_impressum", "netvar_consulta_advogado_uwg_abmahnung", "netvar_consulta_advogado_uwg_freiberufler_vs_gewerbe", "netvar_absichtserklaerung_template_freiberufler_visum"], "relation": "participate_in", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "Netvar_Consulta_Advogado_UWG.md"}, {"id": "netvar_delivery_capacity_system", "label": "Delivery Capacity & Subscription Sustainability", "nodes": ["netvar_entrega_e_assinatura_uma_entrega_ativa", "netvar_entrega_e_assinatura_promessa_48h", "netvar_entrega_e_assinatura_konzeptentwuerfe", "netvar_entrega_e_assinatura_website_abo", "netvar_entrega_e_assinatura_einmalig_1190", "netvar_entrega_e_assinatura_anti_lockin"], "relation": "form", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "Netvar_Entrega_e_Assinatura.md"}];
+// afterDrawing passes ctx already transformed to network coordinate space.
+// Draw node positions raw — no manual pan/zoom/DPR math needed.
+network.on('afterDrawing', function(ctx) {
+    hyperedges.forEach(h => {
+        const positions = h.nodes
+            .map(nid => network.getPositions([nid])[nid])
+            .filter(p => p !== undefined);
+        if (positions.length < 2) return;
+        ctx.save();
+        ctx.globalAlpha = 0.12;
+        ctx.fillStyle = '#6366f1';
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        // Centroid and expanded hull in network coordinates
+        const cx = positions.reduce((s, p) => s + p.x, 0) / positions.length;
+        const cy = positions.reduce((s, p) => s + p.y, 0) / positions.length;
+        const expanded = positions.map(p => ({
+            x: cx + (p.x - cx) * 1.15,
+            y: cy + (p.y - cy) * 1.15
+        }));
+        ctx.moveTo(expanded[0].x, expanded[0].y);
+        expanded.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 0.4;
+        ctx.stroke();
+        // Label
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = '#4f46e5';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(h.label, cx, cy - 5);
+        ctx.restore();
+    });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+{
+  "CLAUDE.md": {
+    "mtime": 1784873783.7736883,
+    "ast_hash": "1da50ea82e1d69a28d88a6aac3e16b93",
+    "semantic_hash": "1da50ea82e1d69a28d88a6aac3e16b93"
+  },
+  "Netvar_Absichtserklaerung_Template.md": {
+    "mtime": 1785101721.6494417,
+    "ast_hash": "5996e6f6935f5ddc54e47a21a94653dc",
+    "semantic_hash": "5996e6f6935f5ddc54e47a21a94653dc"
+  },
+  "Netvar_Angebot_Template.md": {
+    "mtime": 1784831314.8841183,
+    "ast_hash": "b038fd04f8d7c60d0e74babea2d343a5",
+    "semantic_hash": "b038fd04f8d7c60d0e74babea2d343a5"
+  },
+  "Netvar_Consulta_Advogado_UWG.md": {
+    "mtime": 1785101763.472625,
+    "ast_hash": "37517a38ab4a5a45d8af3cf9eb48ceba",
+    "semantic_hash": "37517a38ab4a5a45d8af3cf9eb48ceba"
+  },
+  "Netvar_Entrega_e_Assinatura.md": {
+    "mtime": 1785106359.3963866,
+    "ast_hash": "f13f6781f13a7f922665e4a4843b443e",
+    "semantic_hash": "f13f6781f13a7f922665e4a4843b443e"
+  },
+  "Netvar_Processo_Resposta_Fechamento.md": {
+    "mtime": 1784922551.4619138,
+    "ast_hash": "92cbc27733c157ce330851ddc09ea2b4",
+    "semantic_hash": "92cbc27733c157ce330851ddc09ea2b4"
+  },
+  "STATUS_NETVAR_STUDIO.md": {
+    "mtime": 1784829252.219147,
+    "ast_hash": "e437e25b7305055e982b60c8f121fe24",
+    "semantic_hash": "e437e25b7305055e982b60c8f121fe24"
+  }
+}
