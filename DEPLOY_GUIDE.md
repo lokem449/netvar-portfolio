@@ -1,5 +1,7 @@
-# 🚀 Deploy Guide - Netvar Portfolio
+# 🚀 Deploy Guide - Full Stack Portfolio
 
+**Developer:** Lokem449  
+**Used At:** Netvar Studios (Marketing Agency)  
 **Data:** 2026-08-07  
 **Status:** Pronto para deploy  
 
@@ -111,10 +113,10 @@ git push -u origin master
 ## 🔗 LinkedIn Post Template
 
 ```
-🚀 Portfólio Técnico Netvar Studio
+🚀 Portfólio Técnico - Full Stack Projects
 
-Acabo de publicar 4 projetos full-stack que demonstram 
-minha expertise em automation, AI, e web development:
+Acabo de publicar 4 projetos de automação e desenvolvimento
+que estou usando no dia a dia na Netvar Studios:
 
 1️⃣ 3D Interactive Landing Page
    • Next.js 14 + React Three Fiber + Three.js

@@ -1,9 +1,10 @@
-# 🎯 Netvar Portfolio - Full Stack Projects
+# 🎯 Full Stack Portfolio - Lokem449
 
 **Live Demo:** [3D Interactive Landing](https://netvar-3d.vercel.app)  
-**Repository:** [github.com/lokem449/netvar-portfolio](https://github.com/lokem449/netvar-portfolio)
+**Repository:** [github.com/lokem449/netvar-portfolio](https://github.com/lokem449/netvar-portfolio)  
+**Built by:** Lokem | **Used at:** Netvar Studios (Marketing Agency)
 
-A collection of 4 production-ready projects showcasing full-stack development, AI integration, automation, and data analytics capabilities.
+A collection of 4 production-ready projects showcasing full-stack development, AI integration, automation, and data analytics capabilities. These are personal projects used operationally at Netvar Studios for marketing automation and client analytics.
 
 ---
 
@@ -245,17 +246,19 @@ Each project includes comprehensive README with:
 - **GitHub:** [lokem449](https://github.com/lokem449)
 - **Vercel:** [lokem449s-projects](https://vercel.com/lokem449s-projects)
 - **Email:** lokem449@gmail.com
+- **Current:** Netvar Studios (Marketing Automation)
 
 ---
 
 ## 📝 License
 
-MIT © 2026 Netvar Studio
+MIT © 2026 Lokem
 
 ---
 
 **Status:** ✅ Production Ready  
 **Last Updated:** 2026-08-07  
-**Maintainer:** Lokem
+**Maintainer:** Lokem449  
+**Used At:** Netvar Studios (for marketing automation & analytics)
 
 🚀 **Ready to explore? Start with the [3D Landing Page](https://netvar-3d.vercel.app)!**
